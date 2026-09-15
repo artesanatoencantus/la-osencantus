@@ -821,6 +821,10 @@ let selecao = {
 };
 let precoModelo = 0, precoCor = 0, precoMisterio = 0, precoNomes = 0, precoCruz = 0, precoRelicario = 0;
 
+// Valor cobrado por cada nome extra (a partir do 3º) na personalização com nomes.
+// Sobrescrito por 'terco_preco_por_nome_extra' na planilha, se configurada.
+let PRECO_NOME_EXTRA = 1;
+
 /* =============================================
    UTILITÁRIOS
    ============================================= */
@@ -833,7 +837,11 @@ function recalcularTotal() {
 function calcularPrecoNomes(nomes) {
   const qtd = nomes.filter(n => n.trim() !== '').length;
   const extras = Math.max(0, qtd - 2);
-  return extras;
+  return extras * PRECO_NOME_EXTRA;
+}
+
+function formatarPrecoNomeExtra() {
+  return PRECO_NOME_EXTRA.toFixed(2).replace('.', ',');
 }
 
 function atualizarProgresso() {
@@ -897,7 +905,7 @@ function renderNomesBloco(nomesArray) {
       <strong>💡 Personalização com nomes:</strong><br>
       ✅ 1º nome — <strong>Grátis</strong><br>
       ✅ 2º nome — <strong>Grátis</strong><br>
-      💰 3º ao 5º nome — <strong>R$ 1,00 cada</strong><br>
+      💰 3º ao 5º nome — <strong>R$ ${formatarPrecoNomeExtra()} cada</strong><br>
       ⚠️ Nome composto (ex: Maria Eduarda) conta como <strong>2 nomes</strong>
     </div>
     <div id="nomes-lista">`;
@@ -906,7 +914,7 @@ function renderNomesBloco(nomesArray) {
     const gratis = i < 2;
     const badge = gratis
       ? `<span class="nome-badge gratis">Grátis</span>`
-      : `<span class="nome-badge pago">R$ 1,00</span>`;
+      : `<span class="nome-badge pago">R$ ${formatarPrecoNomeExtra()}</span>`;
     const remBtn = i > 0
       ? `<button class="btn-rem-nome" onclick="removerNome(${i})" title="Remover">×</button>`
       : '';
@@ -923,7 +931,7 @@ function renderNomesBloco(nomesArray) {
 
   if (nomesArray.length < maxNomes) {
     const proxIdx = nomesArray.length;
-    const proxPreco = proxIdx >= 2 ? ' (R$ 1,00)' : ' (Grátis)';
+    const proxPreco = proxIdx >= 2 ? ` (R$ ${formatarPrecoNomeExtra()})` : ' (Grátis)';
     html += `<button class="btn-add-nome" onclick="adicionarNome()">+ Adicionar nome ${proxIdx + 1}${proxPreco}</button>`;
   }
 
@@ -1284,6 +1292,10 @@ function aplicarPrecosPlanilha(overrides) {
     if (!item || chave === null || chave === undefined) return;
     if (overrides[chave] !== undefined && !isNaN(overrides[chave])) item.preco = overrides[chave];
   };
+
+  if (overrides['terco_preco_por_nome_extra'] !== undefined && !isNaN(overrides['terco_preco_por_nome_extra'])) {
+    PRECO_NOME_EXTRA = overrides['terco_preco_por_nome_extra'];
+  }
 
   // Personalizados / Chaveiro / Veículo — preço base único por categoria
   ['tradicional', 'chaveiro', 'veiculo'].forEach(tipo => {

@@ -6,6 +6,7 @@
 <title>Carrinho - Laços Encantus</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
 <style>
 * { box-sizing: border-box; }
@@ -476,8 +477,8 @@ button {
         <label>FRETE</label>
         <select id="frete" onchange="render()">
           <option value="0">Centro (Grátis)</option>
-          <option value="5">Outros bairros (+R$ 5,00)</option>
-          <option value="15">Outras cidades (+R$ 15,00)</option>
+          <option id="opt-frete-bairros" value="5">Outros bairros (+R$ 5,00)</option>
+          <option id="opt-frete-cidades" value="15">Outras cidades (+R$ 15,00)</option>
         </select>
       </div>
     </div>
@@ -510,6 +511,50 @@ button {
 <script>
 
 let carrinho = JSON.parse(localStorage.getItem('carrinho')) || [];
+
+/* =============================================
+   PREÇOS VIA GOOGLE SHEETS (opcional)
+   ============================================= */
+const URL_PLANILHA_PRECOS = '';
+let PRECO_NOME_EXTRA = 1; // sobrescrito por 'terco_preco_por_nome_extra', se a planilha estiver configurada
+
+async function carregarPrecosPlanilha() {
+  if (!URL_PLANILHA_PRECOS) return;
+  try {
+    const resp = await Promise.race([
+      fetch(URL_PLANILHA_PRECOS, { cache: 'no-store' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+    ]);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const texto = await resp.text();
+    const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+    const overrides = {};
+    data.forEach(linha => {
+      const chave = (linha.chave || '').trim();
+      if (!chave || linha.preco === undefined || linha.preco === '') return;
+      const num = parseFloat(String(linha.preco).replace(',', '.'));
+      if (!isNaN(num)) overrides[chave] = num;
+    });
+
+    if (overrides.terco_preco_por_nome_extra !== undefined) {
+      PRECO_NOME_EXTRA = overrides.terco_preco_por_nome_extra;
+    }
+
+    if (overrides.frete_outros_bairros !== undefined) {
+      const opt = document.getElementById('opt-frete-bairros');
+      opt.value = overrides.frete_outros_bairros;
+      opt.textContent = `Outros bairros (+R$ ${overrides.frete_outros_bairros.toFixed(2).replace('.', ',')})`;
+    }
+    if (overrides.frete_outras_cidades !== undefined) {
+      const opt = document.getElementById('opt-frete-cidades');
+      opt.value = overrides.frete_outras_cidades;
+      opt.textContent = `Outras cidades (+R$ ${overrides.frete_outras_cidades.toFixed(2).replace('.', ',')})`;
+    }
+  } catch (e) {
+    console.warn('Não foi possível carregar preços da planilha, usando os valores fixos do código.', e);
+  }
+}
 
 /* =============================================
    MAPEAMENTO DE RÓTULOS
@@ -556,7 +601,7 @@ function renderBlocoNomes(nomes) {
   preenchidos.forEach((nome, i) => {
     const gratis = i < 2;
     const badgeClass = gratis ? 'chip-gratis' : 'chip-pago';
-    const badgeTexto = gratis ? 'Grátis' : 'R$1';
+    const badgeTexto = gratis ? 'Grátis' : `R$${PRECO_NOME_EXTRA}`;
     chips += `
       <div class="nome-chip">
         ${escapeHtml(nome)}
@@ -775,7 +820,7 @@ function textoPersonalizacao(item) {
     const nomesPreenchidos = p.nomes.filter(n => n && n.trim() !== '');
     if (nomesPreenchidos.length > 0) {
       nomesPreenchidos.forEach((n, i) => {
-        const label = i < 2 ? `(Grátis)` : `(R$1,00)`;
+        const label = i < 2 ? `(Grátis)` : `(R$${PRECO_NOME_EXTRA.toFixed(2).replace('.', ',')})`;
         partes.push(`Nome ${i + 1}: ${n} ${label}`);
       });
     }
@@ -880,7 +925,7 @@ function finalizarWhatsApp() {
   render();
 }
 
-render();
+carregarPrecosPlanilha().finally(render);
 </script>
 </body>
 </html>
