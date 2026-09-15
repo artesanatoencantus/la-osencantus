@@ -6,6 +6,7 @@
 <title>Monte seu Terço - Laços Encantus</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
 <style>
 * { box-sizing: border-box; }
@@ -102,6 +103,19 @@ nav a { color: white; text-decoration: none; font-size: 14px; font-weight: 500; 
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin-top: 8px;
+  position: relative;
+  transition: opacity 0.25s;
+}
+.tipo-grid.carregando-precos {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.precos-status {
+  text-align: center;
+  font-size: 11px;
+  color: #ff4da6;
+  margin-top: 6px;
+  min-height: 14px;
 }
 @media (max-width: 480px) {
   .tipo-grid { grid-template-columns: repeat(2, 1fr); }
@@ -646,6 +660,7 @@ nav a { color: white; text-decoration: none; font-size: 14px; font-weight: 500; 
       <div class="icone">🎁</div>Embalagem
     </div>
   </div>
+  <div class="precos-status" id="precos-status"></div>
 
   <!-- CATEGORIAS -->
   <div id="categorias-area" style="display:none;">
@@ -1212,6 +1227,10 @@ const catalogoCruz = [
 // ── BLOCO "FORMA DE MONTAR" (padrão novo) ────────────────────
 // Disponível em todos os produtos, exceto Pulseira e Caixa/Embalagem.
 const tiposComFormaMontarExtra = ['tradicional', 'chaveiro', 'veiculo', 'noiva', 'luxo', 'infantil'];
+
+// Tipos que usam o bloco de nomes personalizados (ver renderNomesBloco).
+// Usado em finalizar() para exigir pelo menos 1 nome antes de adicionar ao carrinho.
+const tiposComNomes = ['tradicional', 'chaveiro', 'infantil', 'luxo'];
 const opcoesFormaMontarExtra = [
   { nome: 'Normal',                        valor: 'normal',    emoji: '📿' },
   { nome: 'Com mini miçangas',             valor: 'miçangas',  emoji: '✨' },
@@ -1244,6 +1263,164 @@ const opcoesTamanhoConta = [
   { nome: 'M 10mm', valor: 'M10mm', emoji: '🔸' },
   { nome: 'G 12mm', valor: 'G12mm', emoji: '⚫' }
 ];
+
+/* =============================================
+   PREÇOS VIA GOOGLE SHEETS (opcional)
+   =============================================
+   Cole aqui o link CSV publicado da planilha (Arquivo > Compartilhar >
+   Publicar na Web > formato CSV). Deixe em branco ('') para usar sempre
+   os preços fixos definidos acima nos catálogos.
+   A planilha deve ter as colunas: chave, descricao, preco, preco_original
+   Use as mesmas chaves do arquivo planilha-precos.csv (ex: terco_cruz_simples).
+   ============================================= */
+const URL_PLANILHA_PRECOS = '';
+
+// Aplica os valores vindos da planilha (objeto chave->preco) por cima dos
+// catálogos já montados acima. Cada "chave" representa um preço-base
+// (ex: todas as cores padrão custam o mesmo), não um item individual —
+// por isso um único valor pode afetar vários produtos de uma vez.
+function aplicarPrecosPlanilha(overrides) {
+  const aplicar = (item, chave) => {
+    if (!item || chave === null || chave === undefined) return;
+    if (overrides[chave] !== undefined && !isNaN(overrides[chave])) item.preco = overrides[chave];
+  };
+
+  // Personalizados / Chaveiro / Veículo — preço base único por categoria
+  ['tradicional', 'chaveiro', 'veiculo'].forEach(tipo => {
+    Object.values(bancoModelos[tipo]).forEach(itens => {
+      itens.forEach(it => aplicar(it, 'terco_tradicional_base'));
+    });
+  });
+
+  // Luxo — modelos
+  Object.entries(categoriasLuxo).forEach(([cat, itens]) => {
+    if (cat === 'Linha de Luxo') {
+      const mapaRelicario = {
+        'Relicário Dourado':      'terco_luxo_relicario_dourado',
+        'Relicário Prata':        'terco_luxo_relicario_prata',
+        'Relicário Ouro Velho':   'terco_luxo_relicario_ouro_velho',
+        'Relicário P Ouro':       'terco_luxo_relicario_pequeno_ouro',
+        'Relicário P Prata':      'terco_luxo_relicario_pequeno_prata',
+        'Relicário P Ouro Velho': 'terco_luxo_relicario_pequeno_ouro_velho'
+      };
+      itens.forEach(it => aplicar(it, mapaRelicario[it.nome]));
+    } else if (cat === 'Profissões') {
+      itens.forEach(it => aplicar(it, 'terco_luxo_profissoes'));
+    } else {
+      itens.forEach(it => aplicar(it, 'terco_luxo_base'));
+    }
+  });
+
+  // Pulso — todos os modelos
+  Object.values(bancoModelos.pulso).forEach(itens => {
+    itens.forEach(it => aplicar(it, 'terco_pulso_base'));
+  });
+
+  // Noiva — modelos e relicários
+  (bancoModelos.noiva['Prata']   || []).forEach(it => aplicar(it, 'terco_noiva_prata_base'));
+  (bancoModelos.noiva['Dourado'] || []).forEach(it => aplicar(it, 'terco_noiva_dourado_base'));
+  relicariosNoivaPorTom.prata.forEach(it   => aplicar(it, 'terco_noiva_relicario_prata'));
+  relicariosNoivaPorTom.dourado.forEach(it => aplicar(it, 'terco_noiva_relicario_dourado'));
+
+  // Infantil — modelos por material
+  (bancoModelos.infantil['Emborrachado'] || []).forEach(it => aplicar(it, 'terco_infantil_emborrachado'));
+  (bancoModelos.infantil['Metal']        || []).forEach(it => aplicar(it, 'terco_infantil_metal'));
+  (bancoModelos.infantil['Biscuit']      || []).forEach(it => aplicar(it, 'terco_infantil_biscuit'));
+
+  // Embalagem
+  const mapaEmbalagem = {
+    'Caixa PP (mini chaveiros)':     'terco_embalagem_pp',
+    'Caixa P (pulseiras/chaveiros)': 'terco_embalagem_p',
+    'Caixa M (terços simples)':      'terco_embalagem_m',
+    'Caixa G (terços de luxo)':      'terco_embalagem_g'
+  };
+  Object.entries(bancoModelos.embalagem).forEach(([cat, itens]) => {
+    itens.forEach(it => aplicar(it, mapaEmbalagem[cat]));
+  });
+
+  // Cores
+  Object.values(coresPulso).forEach(itens       => itens.forEach(it => aplicar(it, 'terco_cor_pulso')));
+  Object.values(coresDisponiveis).forEach(itens => itens.forEach(it => aplicar(it, 'terco_cor_padrao')));
+  Object.values(coresInfantil).forEach(itens    => itens.forEach(it => aplicar(it, 'terco_cor_infantil')));
+  Object.entries(coresLuxo).forEach(([cor, itens]) => {
+    if (cor === 'Cristais') itens.forEach(it => aplicar(it, 'terco_cor_luxo_cristal'));
+    else itens.forEach(it => aplicar(it, 'terco_cor_luxo_padrao'));
+  });
+
+  // Mistérios
+  const mapaMisterioDefault = {
+    'Granulados': 'terco_misterio_granulado_variado', 'Variados': 'terco_misterio_granulado_variado',
+    'Flores': 'terco_misterio_flor_perolado_metal', 'Perolados': 'terco_misterio_flor_perolado_metal',
+    'Metais': 'terco_misterio_flor_perolado_metal'
+  };
+  Object.entries(bancoMisteriosPorTipo.default).forEach(([cat, itens]) => {
+    itens.forEach(it => aplicar(it, mapaMisterioDefault[cat]));
+  });
+
+  const mapaMisterioLuxo = {
+    'Granulados': 'terco_misterio_luxo_granulado_variado', 'Variados': 'terco_misterio_luxo_granulado_variado',
+    'Flores': 'terco_misterio_luxo_flor_perolado', 'Perolados': 'terco_misterio_luxo_flor_perolado'
+  };
+  Object.entries(bancoMisteriosPorTipo.luxo).forEach(([cat, itens]) => {
+    itens.forEach(it => aplicar(it, mapaMisterioLuxo[cat]));
+  });
+
+  const mapaMisterioInfantil = {
+    'Granulados': 'terco_misterio_infantil_granulado_variado', 'Variados': 'terco_misterio_infantil_granulado_variado',
+    'Flores': 'terco_misterio_infantil_flor_perolado', 'Perolados': 'terco_misterio_infantil_flor_perolado'
+  };
+  Object.entries(bancoMisteriosPorTipo.infantil).forEach(([cat, itens]) => {
+    itens.forEach(it => aplicar(it, mapaMisterioInfantil[cat]));
+  });
+
+  misteriosNoiva.forEach(it => aplicar(it, 'terco_misterio_noiva'));
+
+  // Cruz (item "Sem cruz" fica sempre grátis, não tem chave na planilha)
+  const mapaCruz = {
+    'Cruz Simples':    'terco_cruz_simples',
+    'Cruz com Cristo': 'terco_cruz_com_cristo',
+    'Cruz Vazada':     'terco_cruz_vazada',
+    'Cruz Dourada':    'terco_cruz_dourada',
+    'Cruz Prateada':   'terco_cruz_prateada'
+  };
+  catalogoCruz.forEach(it => aplicar(it, mapaCruz[it.nome]));
+}
+
+async function carregarPrecosPlanilha() {
+  const statusEl = document.getElementById('precos-status');
+  const gridEl   = document.getElementById('tipo-grid');
+
+  if (!URL_PLANILHA_PRECOS) return; // planilha não configurada: usa preços fixos do código
+
+  gridEl.classList.add('carregando-precos');
+  if (statusEl) statusEl.textContent = 'Atualizando preços...';
+
+  try {
+    const resp = await Promise.race([
+      fetch(URL_PLANILHA_PRECOS, { cache: 'no-store' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+    ]);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const texto = await resp.text();
+    const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+    const overrides = {};
+    data.forEach(linha => {
+      const chave = (linha.chave || '').trim();
+      if (!chave || linha.preco === undefined || linha.preco === '') return;
+      const num = parseFloat(String(linha.preco).replace(',', '.'));
+      if (!isNaN(num)) overrides[chave] = num;
+    });
+
+    aplicarPrecosPlanilha(overrides);
+  } catch (e) {
+    console.warn('Não foi possível carregar preços da planilha, usando os valores fixos do código.', e);
+  } finally {
+    gridEl.classList.remove('carregando-precos');
+    if (statusEl) statusEl.textContent = '';
+  }
+}
+carregarPrecosPlanilha();
 
 /* =============================================
    FLUXO DE SELEÇÃO
@@ -1845,6 +2022,9 @@ function mostrarPersonalizacao(tipo) {
         <span id="foto-nome" style="font-size:11px;color:#bbb;margin-top:4px;display:block;">
           ${escapeHtml(selecao.personalizacao.fotoNome) || 'Nenhum arquivo selecionado'}
         </span>
+        <span style="font-size:11px;color:#ff4da6;margin-top:6px;display:block;">
+          📌 Após adicionar ao carrinho, vamos pedir que você reenvie essa foto pelo WhatsApp para garantir a melhor qualidade.
+        </span>
       </div>` : '';
 
     conteudo.innerHTML = `
@@ -1871,6 +2051,9 @@ function mostrarPersonalizacao(tipo) {
         <input type="file" accept="image/*" onchange="handleFotoUpload(this)">
         <span id="foto-nome" style="font-size:11px;color:#bbb;margin-top:4px;display:block;">
           ${escapeHtml(selecao.personalizacao.fotoNome) || 'Nenhum arquivo selecionado'}
+        </span>
+        <span style="font-size:11px;color:#ff4da6;margin-top:6px;display:block;">
+          📌 Após adicionar ao carrinho, vamos pedir que você reenvie essa foto pelo WhatsApp para garantir a melhor qualidade.
         </span>
       </div>` : '';
 
@@ -1907,6 +2090,9 @@ function mostrarPersonalizacao(tipo) {
         <input type="file" accept="image/*" onchange="handleFotoUpload(this)">
         <span id="foto-nome" style="font-size:11px;color:#bbb;margin-top:4px;display:block;">
           ${escapeHtml(selecao.personalizacao.fotoNome) || 'Nenhum arquivo selecionado'}
+        </span>
+        <span style="font-size:11px;color:#ff4da6;margin-top:6px;display:block;">
+          📌 Se enviar, vamos pedir que você reenvie essa foto pelo WhatsApp após o pedido, para garantir a melhor qualidade.
         </span>
       </div>`;
     area.style.display = 'block';
@@ -1953,6 +2139,9 @@ function mostrarPersonalizacao(tipo) {
         <input type="file" id="pers-foto" accept="image/*" onchange="handleFotoUpload(this)">
         <span id="foto-nome" style="font-size:11px;color:#bbb;margin-top:4px;display:block;">
           ${escapeHtml(selecao.personalizacao.fotoNome) || 'Nenhum arquivo selecionado'}
+        </span>
+        <span style="font-size:11px;color:#ff4da6;margin-top:6px;display:block;">
+          📌 Se enviar, vamos pedir que você reenvie essa foto pelo WhatsApp após o pedido, para garantir a melhor qualidade.
         </span>
       </div>`;
     area.style.display = 'block';
@@ -2051,6 +2240,26 @@ function finalizar() {
         return;
       }
     }
+  }
+
+  // Personalização com nomes: exige pelo menos 1 nome preenchido
+  if (tiposComNomes.includes(tipo)) {
+    const nomesPreenchidos = (selecao.personalizacao.nomes || []).filter(n => n && n.trim() !== '');
+    if (nomesPreenchidos.length === 0) {
+      mostrarPopupErro('Campo obrigatório', 'Digite pelo menos um nome para a personalização.');
+      return;
+    }
+  }
+
+  // Categorias que dependem de uma foto enviada pelo cliente (foto vai
+  // impressa/gravada na peça, não é só referência) exigem o upload.
+  const precisaFotoObrigatoria =
+    (['tradicional', 'chaveiro', 'veiculo'].includes(tipo) && selecao.categoria === 'Foto Personalizada') ||
+    (tipo === 'luxo' && selecao.categoria === 'Linha de Luxo');
+
+  if (precisaFotoObrigatoria && !selecao.personalizacao.fotoBase64) {
+    mostrarPopupErro('Campo obrigatório', 'Envie a foto para continuar — essa categoria exige uma imagem para a personalização.');
+    return;
   }
 
   const totalNum = precoModelo + precoCor + precoMisterio + precoNomes + precoCruz + precoRelicario;

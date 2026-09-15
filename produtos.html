@@ -6,6 +6,7 @@
 <title>Produtos Prontos — Laços Encantus</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
 <style>
 :root {
@@ -1002,8 +1003,51 @@ function mostrarToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('visivel'), 2400);
 }
 
+/* =============================================
+   PREÇOS VIA GOOGLE SHEETS (opcional)
+   =============================================
+   Cole aqui o link CSV publicado da planilha (Arquivo > Compartilhar >
+   Publicar na Web > formato CSV). Deixe em branco ('') para usar sempre
+   os preços fixos definidos acima em PRODUTOS.
+   A planilha deve ter as colunas: chave, descricao, preco, preco_original
+   Cada produto usa a chave "produto_<id>" (produto_1, produto_2, ...).
+   ============================================= */
+const URL_PLANILHA_PRECOS = '';
+
+async function carregarPrecosPlanilha() {
+  if (!URL_PLANILHA_PRECOS) return;
+  try {
+    const resp = await Promise.race([
+      fetch(URL_PLANILHA_PRECOS, { cache: 'no-store' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+    ]);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const texto = await resp.text();
+    const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+    const overrides = {};
+    data.forEach(linha => {
+      const chave = (linha.chave || '').trim();
+      if (!chave) return;
+      overrides[chave] = {
+        preco: linha.preco !== undefined && linha.preco !== '' ? parseFloat(String(linha.preco).replace(',', '.')) : null,
+        precoOriginal: linha.preco_original !== undefined && linha.preco_original !== '' ? parseFloat(String(linha.preco_original).replace(',', '.')) : null
+      };
+    });
+
+    PRODUTOS.forEach(p => {
+      const ov = overrides['produto_' + p.id];
+      if (!ov) return;
+      if (ov.preco !== null && !isNaN(ov.preco)) p.preco = ov.preco;
+      p.precoOriginal = (ov.precoOriginal !== null && !isNaN(ov.precoOriginal)) ? ov.precoOriginal : null;
+    });
+  } catch (e) {
+    console.warn('Não foi possível carregar preços da planilha, usando os valores fixos do código.', e);
+  }
+}
+
 /* ─── START ─── */
-init();
+carregarPrecosPlanilha().finally(init);
 </script>
 
 </body>

@@ -819,6 +819,7 @@ function finalizarWhatsApp() {
   const id    = gerarID();
   const frete = Number(document.getElementById('frete').value) || 0;
   let subtotal = 0;
+  let temItemComFoto = false;
 
   let msg = '🛍️ *LAÇOS ENCANTUS — NOVO PEDIDO*\n';
   msg += '━━━━━━━━━━━━━━━━━━━━━\n';
@@ -847,6 +848,8 @@ function finalizarWhatsApp() {
     const pers = textoPersonalizacao(item);
     if (pers) msg += `   ✍️ Personalização: ${pers}\n`;
 
+    if (item.personalizacao && item.personalizacao.temFoto) temItemComFoto = true;
+
     msg += `   💰 Valor: R$ ${val.toFixed(2).replace('.', ',')}\n\n`;
   });
 
@@ -862,6 +865,9 @@ function finalizarWhatsApp() {
   msg += `Frete: ${frete === 0 ? 'Grátis 🎉' : 'R$ ' + frete.toFixed(2).replace('.', ',')}\n`;
   msg += `*TOTAL: R$ ${total.toFixed(2).replace('.', ',')}*\n\n`;
   msg += '⏳ Personalizados: até 15 dias úteis.\n';
+  if (temItemComFoto) {
+    msg += '📸 Este pedido inclui foto personalizada — por favor, envie a foto original aqui pelo WhatsApp em seguida!\n';
+  }
   msg += '✨ Aguardo confirmação do pedido!';
 
   window.open(
