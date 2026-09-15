@@ -1136,6 +1136,7 @@ function gerarCoresEstilo(corBase, estilos, preco, emoji, prefixoExibicao) {
   const prefixo = prefixoExibicao || corBase;
   return estilos.map(estilo => ({
     nome: `${prefixo} ${estilo}`,
+    corBase: corBase, // usado para permitir preço diferente por cor na planilha
     preco: preco,
     img: obterImagemCor(corBase, estilo),
     emoji: emoji
@@ -1279,7 +1280,19 @@ const opcoesTamanhoConta = [
    Publicar na Web > formato CSV). Deixe em branco ('') para usar sempre
    os preços fixos definidos acima nos catálogos.
    A planilha deve ter as colunas: chave, descricao, preco, preco_original
-   Use as mesmas chaves do arquivo planilha-precos.csv (ex: terco_cruz_simples).
+   Use as mesmas chaves do arquivo planilha-precos.xlsx (ex: terco_cruz_simples).
+
+   PREÇO DIFERENTE PARA UM ITEM ESPECÍFICO DENTRO DE UM GRUPO:
+   Chaves como "terco_cor_padrao" valem para TODOS os itens daquele grupo
+   (todas as cores, todos os mistérios, etc). Para um item pontual custar
+   diferente do resto do grupo, adicione uma linha extra na planilha com a
+   chave "<chave_do_grupo>::<nome_exato_do_item>" — ela tem prioridade sobre
+   o preço do grupo. Exemplos:
+     terco_cor_padrao::Preto Cintilante          (só esse acabamento muda)
+     terco_misterio_granulado_variado::Granulado 3
+     terco_tradicional_base::Nossa Sra. Aparecida 5
+   Não precisa apagar a linha do grupo — ela continua valendo pra todo o
+   resto que não tiver uma exceção própria.
    ============================================= */
 const URL_PLANILHA_PRECOS = '';
 
@@ -1287,14 +1300,48 @@ const URL_PLANILHA_PRECOS = '';
 // catálogos já montados acima. Cada "chave" representa um preço-base
 // (ex: todas as cores padrão custam o mesmo), não um item individual —
 // por isso um único valor pode afetar vários produtos de uma vez.
+// Remove acentos, espaços extras e caixa alta para comparar chaves de forma tolerante
+// (ex: "Preto Cintilante" e "  preto   cintilante " são consideradas a mesma chave).
+function normalizarChave(s) {
+  return (s || '').toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .trim().toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
 function aplicarPrecosPlanilha(overrides) {
-  const aplicar = (item, chave) => {
-    if (!item || chave === null || chave === undefined) return;
-    if (overrides[chave] !== undefined && !isNaN(overrides[chave])) item.preco = overrides[chave];
+  // 'chaveGrupo' aplica o mesmo preço a TODOS os itens daquele grupo (comportamento
+  // padrão). Existem 2 formas de dar um preço diferente para um recorte do grupo,
+  // em ordem de prioridade:
+  //   1) "<chaveGrupo>::<nome exato do item>"  → só aquele item exato muda
+  //   2) "<chaveGrupo>::<cor base>"            → todos os acabamentos daquela cor mudam
+  //                                               (só existe para itens de cor, ex: Preto)
+  const aplicar = (item, chaveGrupo) => {
+    if (!item || chaveGrupo === null || chaveGrupo === undefined) return;
+
+    const chaveItem = normalizarChave(`${chaveGrupo}::${item.nome}`);
+    if (overrides[chaveItem] !== undefined && !isNaN(overrides[chaveItem])) {
+      item.preco = overrides[chaveItem];
+      return;
+    }
+
+    if (item.corBase) {
+      const chaveCor = normalizarChave(`${chaveGrupo}::${item.corBase}`);
+      if (overrides[chaveCor] !== undefined && !isNaN(overrides[chaveCor])) {
+        item.preco = overrides[chaveCor];
+        return;
+      }
+    }
+
+    const chaveGrupoNorm = normalizarChave(chaveGrupo);
+    if (overrides[chaveGrupoNorm] !== undefined && !isNaN(overrides[chaveGrupoNorm])) {
+      item.preco = overrides[chaveGrupoNorm];
+    }
   };
 
-  if (overrides['terco_preco_por_nome_extra'] !== undefined && !isNaN(overrides['terco_preco_por_nome_extra'])) {
-    PRECO_NOME_EXTRA = overrides['terco_preco_por_nome_extra'];
+  const chaveNomeExtra = normalizarChave('terco_preco_por_nome_extra');
+  if (overrides[chaveNomeExtra] !== undefined && !isNaN(overrides[chaveNomeExtra])) {
+    PRECO_NOME_EXTRA = overrides[chaveNomeExtra];
   }
 
   // Personalizados / Chaveiro / Veículo — preço base único por categoria
@@ -1421,7 +1468,7 @@ async function carregarPrecosPlanilha() {
       const chave = (linha.chave || '').trim();
       if (!chave || linha.preco === undefined || linha.preco === '') return;
       const num = parseFloat(String(linha.preco).replace(',', '.'));
-      if (!isNaN(num)) overrides[chave] = num;
+      if (!isNaN(num)) overrides[normalizarChave(chave)] = num;
     });
 
     aplicarPrecosPlanilha(overrides);
