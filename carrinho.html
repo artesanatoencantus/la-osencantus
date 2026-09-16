@@ -483,6 +483,15 @@ button {
       </div>
     </div>
 
+    <div class="form-entrega" style="margin-top:14px;">
+      <div class="form-title">🎟️ Cupom de desconto</div>
+      <div style="display:flex; gap:8px;">
+        <input id="inputCupom" placeholder="Digite seu cupom" style="text-transform:uppercase;" oninput="this.value = this.value.toUpperCase()">
+        <button type="button" onclick="aplicarCupom()" style="width:auto; white-space:nowrap; margin-top:0; background:#ffe27a; color:#7a5c00;">Aplicar</button>
+      </div>
+      <div id="cupom-msg" style="font-size:12px; margin-top:8px; min-height:14px;"></div>
+    </div>
+
     <div class="total-box" id="total-box"></div>
 
     <button class="btn-wpp" onclick="finalizarWhatsApp()">
@@ -554,6 +563,99 @@ async function carregarPrecosPlanilha() {
   } catch (e) {
     console.warn('Não foi possível carregar preços da planilha, usando os valores fixos do código.', e);
   }
+}
+
+/* =============================================
+   CUPONS DE DESCONTO VIA GOOGLE SHEETS (opcional)
+   =============================================
+   Cole aqui o link CSV publicado da aba "Cupons" da planilha (Arquivo >
+   Compartilhar > Publicar na Web > escolha a aba "Cupons" > formato CSV).
+   Deixe em branco ('') para desativar cupons no site.
+
+   A aba "Cupons" deve ter as colunas: cupom, tipo, valor, ativo, descricao
+     - cupom:  o código que o cliente digita (ex: BEMVINDO10)
+     - tipo:   "percentual"   → desconto em % sobre o subtotal
+               "fixo"         → desconto em R$ sobre o subtotal
+               "frete_gratis" → zera o valor do frete
+     - valor:  número do desconto (% ou R$, dependendo do tipo).
+               Para "frete_gratis" o valor é ignorado, pode deixar em branco.
+     - ativo:  SIM ou NAO — cupons com NAO (ou em branco) não funcionam.
+     - descricao: só para sua referência, não aparece pro cliente.
+   ============================================= */
+const URL_PLANILHA_CUPONS = '';
+
+let CUPONS = [];        // lista carregada da planilha
+let cupomAplicado = null; // { cupom, tipo, valor } do cupom válido em uso
+
+async function carregarCupons() {
+  if (!URL_PLANILHA_CUPONS) return;
+  try {
+    const resp = await Promise.race([
+      fetch(URL_PLANILHA_CUPONS, { cache: 'no-store' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+    ]);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const texto = await resp.text();
+    const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+    CUPONS = data
+      .map(linha => ({
+        cupom: (linha.cupom || '').trim().toUpperCase(),
+        tipo: (linha.tipo || '').trim().toLowerCase(),
+        valor: parseFloat(String(linha.valor || '0').replace(',', '.')) || 0,
+        ativo: (linha.ativo || '').trim().toUpperCase() === 'SIM'
+      }))
+      .filter(c => c.cupom && c.ativo && ['percentual', 'fixo', 'frete_gratis'].includes(c.tipo));
+  } catch (e) {
+    console.warn('Não foi possível carregar cupons da planilha.', e);
+    CUPONS = [];
+  }
+}
+
+function aplicarCupom() {
+  const input = document.getElementById('inputCupom');
+  const msgEl = document.getElementById('cupom-msg');
+  const codigo = (input.value || '').trim().toUpperCase();
+
+  if (!codigo) {
+    cupomAplicado = null;
+    msgEl.textContent = '';
+    render();
+    return;
+  }
+
+  const encontrado = CUPONS.find(c => c.cupom === codigo);
+
+  if (!encontrado) {
+    cupomAplicado = null;
+    msgEl.textContent = '❌ Cupom inválido ou expirado.';
+    msgEl.style.color = '#e63946';
+    render();
+    return;
+  }
+
+  cupomAplicado = encontrado;
+  const textoTipo = encontrado.tipo === 'percentual' ? `${encontrado.valor}% off`
+    : encontrado.tipo === 'fixo' ? `R$ ${encontrado.valor.toFixed(2).replace('.', ',')} off`
+    : 'frete grátis';
+  msgEl.textContent = `✅ Cupom "${codigo}" aplicado — ${textoTipo}`;
+  msgEl.style.color = '#1db954';
+  render();
+}
+
+// Calcula { desconto, freteFinal } a partir do subtotal, frete escolhido e cupomAplicado
+function calcularDesconto(subtotal, frete) {
+  if (!cupomAplicado) return { desconto: 0, freteFinal: frete };
+  if (cupomAplicado.tipo === 'percentual') {
+    return { desconto: subtotal * (cupomAplicado.valor / 100), freteFinal: frete };
+  }
+  if (cupomAplicado.tipo === 'fixo') {
+    return { desconto: Math.min(cupomAplicado.valor, subtotal), freteFinal: frete };
+  }
+  if (cupomAplicado.tipo === 'frete_gratis') {
+    return { desconto: 0, freteFinal: 0 };
+  }
+  return { desconto: 0, freteFinal: frete };
 }
 
 /* =============================================
@@ -737,8 +839,16 @@ function render() {
       </div>`;
   });
 
-  const frete = Number(document.getElementById('frete').value) || 0;
-  const total = subtotal + frete;
+  const freteEscolhido = Number(document.getElementById('frete').value) || 0;
+  const { desconto, freteFinal } = calcularDesconto(subtotal, freteEscolhido);
+  const total = Math.max(0, subtotal - desconto) + freteFinal;
+
+  const linhaDesconto = desconto > 0 || (cupomAplicado && cupomAplicado.tipo === 'frete_gratis')
+    ? `<div class="total-linha" style="color:#1db954;">
+         <span>Cupom (${cupomAplicado.cupom})</span>
+         <span>${desconto > 0 ? '- R$ ' + desconto.toFixed(2).replace('.', ',') : '🎉 Frete grátis'}</span>
+       </div>`
+    : '';
 
   document.getElementById('total-box').innerHTML = `
     <div class="total-linha">
@@ -747,11 +857,13 @@ function render() {
     </div>
     <div class="total-linha">
       <span>Frete</span>
-      <span>${frete === 0 ? '🎉 Grátis' : 'R$ ' + frete.toFixed(2).replace('.', ',')}</span>
+      <span>${freteFinal === 0 ? '🎉 Grátis' : 'R$ ' + freteFinal.toFixed(2).replace('.', ',')}</span>
     </div>
+    ${linhaDesconto}
     <div class="total-linha destaque">
       <span>Total</span>
       <span>R$ ${total.toFixed(2).replace('.', ',')}</span>
+
     </div>`;
 }
 
@@ -862,7 +974,7 @@ function finalizarWhatsApp() {
   }
 
   const id    = gerarID();
-  const frete = Number(document.getElementById('frete').value) || 0;
+  const freteEscolhido = Number(document.getElementById('frete').value) || 0;
   let subtotal = 0;
   let temItemComFoto = false;
 
@@ -898,7 +1010,8 @@ function finalizarWhatsApp() {
     msg += `   💰 Valor: R$ ${val.toFixed(2).replace('.', ',')}\n\n`;
   });
 
-  const total = subtotal + frete;
+  const { desconto, freteFinal } = calcularDesconto(subtotal, freteEscolhido);
+  const total = Math.max(0, subtotal - desconto) + freteFinal;
 
   msg += '━━━━━━━━━━━━━━━━━━━━━\n';
   msg += '📍 *DADOS DE ENTREGA*\n';
@@ -907,7 +1020,13 @@ function finalizarWhatsApp() {
   msg += `📌 Bairro: ${bairro}\n\n`;
   msg += '━━━━━━━━━━━━━━━━━━━━━\n';
   msg += `Subtotal: R$ ${subtotal.toFixed(2).replace('.', ',')}\n`;
-  msg += `Frete: ${frete === 0 ? 'Grátis 🎉' : 'R$ ' + frete.toFixed(2).replace('.', ',')}\n`;
+  if (cupomAplicado) {
+    const textoCupom = desconto > 0
+      ? `- R$ ${desconto.toFixed(2).replace('.', ',')}`
+      : '🎉 Frete grátis';
+    msg += `Cupom (${cupomAplicado.cupom}): ${textoCupom}\n`;
+  }
+  msg += `Frete: ${freteFinal === 0 ? 'Grátis 🎉' : 'R$ ' + freteFinal.toFixed(2).replace('.', ',')}\n`;
   msg += `*TOTAL: R$ ${total.toFixed(2).replace('.', ',')}*\n\n`;
   msg += '⏳ Personalizados: até 15 dias úteis.\n';
   if (temItemComFoto) {
@@ -921,11 +1040,14 @@ function finalizarWhatsApp() {
   );
 
   carrinho = [];
+  cupomAplicado = null;
   salvar();
   render();
 }
 
-carregarPrecosPlanilha().finally(render);
+carregarPrecosPlanilha().finally(() => {
+  carregarCupons().finally(render);
+});
 </script>
 </body>
 </html>
