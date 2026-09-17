@@ -1137,6 +1137,7 @@ function gerarCoresEstilo(corBase, estilos, preco, emoji, prefixoExibicao) {
   return estilos.map(estilo => ({
     nome: `${prefixo} ${estilo}`,
     corBase: corBase, // usado para permitir preço diferente por cor na planilha
+    estilo: estilo,   // usado para achar a foto certa na planilha de imagens
     preco: preco,
     img: obterImagemCor(corBase, estilo),
     emoji: emoji
@@ -1480,6 +1481,89 @@ async function carregarPrecosPlanilha() {
   }
 }
 carregarPrecosPlanilha();
+
+/* =============================================
+   FOTOS DE COR VIA GOOGLE SHEETS (opcional)
+   =============================================
+   Cole aqui o link CSV publicado da aba "Imagens" da planilha (Arquivo >
+   Compartilhar > Publicar na Web > escolha a aba "Imagens" > formato CSV).
+   Deixe em branco ('') para usar só o dicionário fixo IMAGENS_CORES do código.
+
+   A aba "Imagens" deve ter as colunas: chave, url
+     - chave: "<Cor>|<Acabamento>" — exatamente como aparece no site, ex:
+              "Azul|Cintilante", "Rosa|Fosco", "Azul Bebê|Perolado"
+     - url:   o link direto da foto (ex: subida no mesmo repositório do
+              GitHub Pages do site, em uma pasta "imagens/").
+   Não precisa renomear o arquivo da foto — o nome do arquivo pode ser
+   qualquer um, só o link precisa estar certo na planilha.
+   ============================================= */
+const URL_PLANILHA_IMAGENS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2zvSbuX-52bdbSgxh13xk4krxD3npZXE2kbdBvON6onMLfHjVY2UOTK7HFOJuxzLC1gomtJPtXmp5/pub?gid=952966700&single=true&output=csv';
+
+async function carregarImagensPlanilha() {
+  if (!URL_PLANILHA_IMAGENS) return;
+  try {
+    const resp = await Promise.race([
+      fetch(URL_PLANILHA_IMAGENS, { cache: 'no-store' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+    ]);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const texto = await resp.text();
+    const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+    const imagensPlanilha = {};
+    data.forEach(linha => {
+      const chave = (linha.chave || '').trim();
+      const url = (linha.url || '').trim();
+      if (!chave || !url) return;
+      imagensPlanilha[normalizarChave(chave)] = url;
+    });
+
+    // Percorre qualquer estrutura (array simples, objeto de arrays, objeto de
+    // objetos de arrays...) e chama o callback em cada item de verdade (que
+    // tem um campo "nome"). Isso permite aplicar imagem em QUALQUER categoria
+    // do site (santos, mistérios, cruzes, relicários, noiva, embalagens...)
+    // sem precisar listar cada coleção manualmente aqui.
+    function paraCadaItemRecursivo(valor, callback) {
+      if (Array.isArray(valor)) {
+        valor.forEach(item => {
+          if (item && typeof item === 'object' && 'nome' in item) callback(item);
+        });
+      } else if (valor && typeof valor === 'object') {
+        Object.values(valor).forEach(v => paraCadaItemRecursivo(v, callback));
+      }
+    }
+
+    const aplicarImagemGenerico = item => {
+      if (!item) return;
+      // Cores usam uma chave mais específica "CorBase|Estilo" (com fallback
+      // sem o sufixo "Luxo", pra Preto Luxo reaproveitar a foto de Preto).
+      if (item.corBase && item.estilo) {
+        const nomeBase = item.corBase.replace(/\s+Luxo$/, '');
+        const chaveCorEstilo = normalizarChave(`${item.corBase}|${item.estilo}`);
+        const chaveCorEstiloBase = normalizarChave(`${nomeBase}|${item.estilo}`);
+        if (imagensPlanilha[chaveCorEstilo] !== undefined) { item.img = imagensPlanilha[chaveCorEstilo]; return; }
+        if (imagensPlanilha[chaveCorEstiloBase] !== undefined) { item.img = imagensPlanilha[chaveCorEstiloBase]; return; }
+      }
+      // Qualquer outro item: chave = nome exato do item (ex: "Noiva Prata 1",
+      // "Relicário Dourado 3", "Cruz com Cristo").
+      const chaveNome = normalizarChave(item.nome);
+      if (imagensPlanilha[chaveNome] !== undefined) item.img = imagensPlanilha[chaveNome];
+    };
+
+    [
+      categoriasTradicional, categoriasLuxo, bancoModelos, coresNoiva,
+      bancoMisteriosPorTipo, catalogoCruz, relicariosNoivaPorTom, misteriosNoiva,
+      coresPulso, coresDisponiveis, coresInfantil, coresLuxo
+    ].forEach(colecao => paraCadaItemRecursivo(colecao, aplicarImagemGenerico));
+
+    // Não existe uma "tela atual" fixa para redesenhar aqui — como este
+    // carregamento roda bem no início, antes do cliente chegar na etapa de
+    // cor, o item já nasce com a foto certa quando a tela dele é aberta.
+  } catch (e) {
+    console.warn('Não foi possível carregar imagens de cor da planilha.', e);
+  }
+}
+carregarImagensPlanilha();
 
 /* =============================================
    FLUXO DE SELEÇÃO
