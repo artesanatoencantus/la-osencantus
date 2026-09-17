@@ -1295,7 +1295,7 @@ const opcoesTamanhoConta = [
    Não precisa apagar a linha do grupo — ela continua valendo pra todo o
    resto que não tiver uma exceção própria.
    ============================================= */
-const URL_PLANILHA_PRECOS = 'https://docs.google.com/spreadsheets/d/1JP4eOxyRJw3qSE3YYewedpmX-7L9EK8tu1kzy42GIpI/export?format=csv&gid=668658845';
+const URL_PLANILHA_PRECOS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTukeBv8NGBSi38tP9WueAXtf0w4Iwy-vGZabl-0l35KO6_HClH1LIJkxRU13EZ0oxZKZ7YIC56vS6a/pub?gid=427301769&single=true&output=csv';
 
 // Aplica os valores vindos da planilha (objeto chave->preco) por cima dos
 // catálogos já montados acima. Cada "chave" representa um preço-base
@@ -1497,7 +1497,7 @@ carregarPrecosPlanilha();
    Não precisa renomear o arquivo da foto — o nome do arquivo pode ser
    qualquer um, só o link precisa estar certo na planilha.
    ============================================= */
-const URL_PLANILHA_IMAGENS = 'https://docs.google.com/spreadsheets/d/1JP4eOxyRJw3qSE3YYewedpmX-7L9EK8tu1kzy42GIpI/export?format=csv&gid=952966700';
+const URL_PLANILHA_IMAGENS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTukeBv8NGBSi38tP9WueAXtf0w4Iwy-vGZabl-0l35KO6_HClH1LIJkxRU13EZ0oxZKZ7YIC56vS6a/pub?gid=2135992822&single=true&output=csv';
 
 async function carregarImagensPlanilha() {
   if (!URL_PLANILHA_IMAGENS) return;
