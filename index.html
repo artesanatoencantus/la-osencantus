@@ -13,9 +13,10 @@
   <meta property="og:title" content="Laços Encantus — Terços Personalizados">
   <meta property="og:description" content="Monte seu terço do seu jeito e receba em casa. +2000 terços já enviados!">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="">
+  <meta property="og:image" content="imagens/banner-loja.jpg" id="meta-og-image">
 
   <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
   <style>
     :root {
@@ -576,8 +577,10 @@
 
     <div class="banner-container">
       <img
-        src="https://media.discordapp.net/attachments/1496138227331891282/1497288558875250828/7ec1137f-84bb-451d-8063-dcc4e4bd2a73.jpg?ex=69ecfa22&is=69eba8a2&hm=a48bb20aa13b7533764a7f7cfb671a9dcb9041400782650ab40d6bbbbda9e68c&=&format=webp&width=1676&height=838"
+        id="img-banner-home"
+        src="imagens/banner-loja.jpg"
         alt="Terços artesanais personalizados Laços Encantus"
+        onerror="this.style.background='linear-gradient(135deg,#fff0f8,#fffbe8)'; this.style.opacity='0.4'"
       >
       <button class="banner-btn" onclick="window.location.href='terco.html'">
         ✨ Montar Meu Terço
@@ -620,9 +623,11 @@
       <h2 class="section-title">Terços Personalizados</h2>
     </div>
     <img
+      id="img-galeria-personalizados"
       class="gallery-img"
-      src="https://media.discordapp.net/attachments/1496138227331891282/1497299494528876686/WhatsApp_Image_2026-04-24_at_15.12.16.jpeg?ex=69ed0451&is=69ebb2d1&hm=fce0a19f0bb7bb9cea000bad0ab5733811c7906a2052351c3423cc722e2a8bb9&=&format=webp&width=1141&height=953"
+      src="imagens/galeria-personalizados.jpg"
       alt="Terços personalizados feitos à mão - Laços Encantus"
+      onerror="this.style.background='linear-gradient(135deg,#fff0f8,#fffbe8)'; this.style.opacity='0.4'"
     >
   </div>
 
@@ -636,9 +641,11 @@
       <h2 class="section-title">Terços Prontos</h2>
     </div>
     <img
+      id="img-galeria-prontos"
       class="gallery-img"
-      src="https://media.discordapp.net/attachments/1496138227331891282/1496210710148153424/6675570c-0c3e-419f-9295-0a0a0744bd54.jpg"
+      src="imagens/galeria-prontos.jpg"
       alt="Terços prontos disponíveis na loja - Laços Encantus"
+      onerror="this.style.background='linear-gradient(135deg,#fff0f8,#fffbe8)'; this.style.opacity='0.4'"
     >
   </div>
 
@@ -724,6 +731,65 @@
   </button>
 
   <script>
+    /* =============================================
+       IMAGENS DA PÁGINA VIA GOOGLE SHEETS (opcional)
+       =============================================
+       Reaproveita a MESMA planilha/aba "Imagens" que já é usada no
+       terco.html (aba com colunas: chave, url). Basta adicionar linhas
+       com estas chaves para trocar as fotos sem mexer no código:
+
+         chave                          | o que controla
+         --------------------------------|--------------------------------
+         site_banner_home               | Foto grande da capa (hero)
+         site_galeria_personalizados    | Foto da seção "Terços Personalizados"
+         site_galeria_prontos           | Foto da seção "Terços Prontos"
+         site_og_image                  | Foto de preview ao compartilhar o link
+                                          (WhatsApp/Instagram) — use um link
+                                          ABSOLUTO (https://...), não local.
+
+       Enquanto essas linhas não existirem na planilha, o site usa as
+       fotos padrão salvas na pasta imagens/ (banner-loja.jpg etc).
+       Deixe URL_PLANILHA_IMAGENS_HOME em branco ('') para nunca buscar
+       a planilha e usar sempre as fotos locais da pasta imagens/.
+       ============================================= */
+    const URL_PLANILHA_IMAGENS_HOME = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTukeBv8NGBSi38tP9WueAXtf0w4Iwy-vGZabl-0l35KO6_HClH1LIJkxRU13EZ0oxZKZ7YIC56vS6a/pub?gid=2135992822&single=true&output=csv';
+
+    async function carregarImagensHomePlanilha() {
+      if (!URL_PLANILHA_IMAGENS_HOME) return;
+      try {
+        const resp = await Promise.race([
+          fetch(URL_PLANILHA_IMAGENS_HOME, { cache: 'no-store' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 4000))
+        ]);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const texto = await resp.text();
+        const { data } = Papa.parse(texto, { header: true, skipEmptyLines: true });
+
+        const overrides = {};
+        data.forEach(linha => {
+          const chave = (linha.chave || '').trim();
+          const url = (linha.url || '').trim();
+          if (chave && url) overrides[chave] = url;
+        });
+
+        if (overrides.site_banner_home) {
+          document.getElementById('img-banner-home').src = overrides.site_banner_home;
+        }
+        if (overrides.site_galeria_personalizados) {
+          document.getElementById('img-galeria-personalizados').src = overrides.site_galeria_personalizados;
+        }
+        if (overrides.site_galeria_prontos) {
+          document.getElementById('img-galeria-prontos').src = overrides.site_galeria_prontos;
+        }
+        if (overrides.site_og_image) {
+          document.getElementById('meta-og-image').setAttribute('content', overrides.site_og_image);
+        }
+      } catch (e) {
+        console.warn('Não foi possível carregar imagens da planilha, usando as fotos locais.', e);
+      }
+    }
+    carregarImagensHomePlanilha();
+
     // FAB: mostra carrinho quando tem itens
     function atualizarFAB() {
       const carrinho = JSON.parse(localStorage.getItem('carrinho')) || [];
