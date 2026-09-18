@@ -1763,7 +1763,7 @@ function selectModelo(el) {
     let html = '';
     Object.keys(cores).forEach(cor => {
       html += `<div class="option" data-cor="${cor}" data-preco="0" onclick="selectCorNoivaFinal(this)">
-        <div class="option-media" style="font-size:28px">${cores[cor][0]?.emoji || '🎨'}</div>
+        ${renderMedia(cores[cor][0] || { emoji: '🎨' })}
         ${cor}
       </div>`;
     });
@@ -1783,7 +1783,7 @@ function selectModelo(el) {
     Object.keys(cores).forEach(cor => {
       const item = cores[cor][0];
       html += `<div class="option" data-cor="${cor}" onclick="selectCorLuxo(this)">
-        <div class="option-media" style="font-size:28px">${item?.emoji || '🎨'}</div>
+        ${renderMedia(item || { emoji: '🎨' })}
         ${cor}
       </div>`;
     });
@@ -1800,7 +1800,7 @@ function selectModelo(el) {
   const cores = coresPorTipo[tipo] || coresDisponiveis;
   let html = '';
   Object.keys(cores).forEach(cor => {
-    html += `<div class="option" data-cor="${cor}" onclick="selectCorBase(this)"><div class="option-media" style="font-size:28px">${cores[cor][0]?.emoji || '🎨'}</div>${cor}</div>`;
+    html += `<div class="option" data-cor="${cor}" onclick="selectCorBase(this)">${renderMedia(cores[cor][0] || { emoji: '🎨' })}${cor}</div>`;
   });
   document.getElementById('cores').innerHTML = html;
 
@@ -1852,7 +1852,7 @@ function mostrarMisteriosLuxo() {
   const bancoMisterios = bancoMisteriosPorTipo.luxo;
   let html = '';
   Object.keys(bancoMisterios).forEach(cat => {
-    html += `<div class="option" data-cat="${cat}" onclick="selectMisterioCat(this)"><div class="option-media" style="font-size:28px">${bancoMisterios[cat][0]?.emoji || '📿'}</div>${cat}</div>`;
+    html += `<div class="option" data-cat="${cat}" onclick="selectMisterioCat(this)">${renderMedia(bancoMisterios[cat][0] || { emoji: '📿' })}${cat}</div>`;
   });
   document.getElementById('misterios').innerHTML = html;
   document.getElementById('label-misterio').textContent = 'Mistério / Pingente';
@@ -1917,7 +1917,7 @@ function selectCorFinal(el) {
 
   let html = '';
   Object.keys(bancoMisterios).forEach(cat => {
-    html += `<div class="option" data-cat="${cat}" onclick="selectMisterioCat(this)"><div class="option-media" style="font-size:28px">${bancoMisterios[cat][0]?.emoji || '📿'}</div>${cat}</div>`;
+    html += `<div class="option" data-cat="${cat}" onclick="selectMisterioCat(this)">${renderMedia(bancoMisterios[cat][0] || { emoji: '📿' })}${cat}</div>`;
   });
   document.getElementById('misterios').innerHTML = html;
 
