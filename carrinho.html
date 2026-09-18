@@ -429,6 +429,7 @@ button {
 }
 .popup-content button:hover { background: #eeeeee; }
 </style>
+<link rel="stylesheet" href="premium.css">
 </head>
 
 <body>
@@ -693,6 +694,46 @@ const tiposComPersonalizacaoTexto = ['noiva'];
 const tiposSemCorMisterio = ['embalagem', 'produto'];
 
 /* =============================================
+   ESCOLHAS EXTRAS DO TERÇO (cruz, relicário, forma de montar)
+   Gravadas pelo terco.html: cruz, relicarioOpcao, relicarioModelo,
+   relicarioAcabamento e formaMontagemExtra.
+   Usado tanto na tela do carrinho quanto na mensagem do WhatsApp.
+   ============================================= */
+const NOMES_FORMA_MONTAGEM = {
+  'normal':     'Normal',
+  'miçangas':   'Com mini miçangas',
+  'nos':        'Com nós entre os mistérios',
+  'contrapino': 'Contrapino'
+};
+
+function linhasEscolhas(item) {
+  const linhas = [];
+
+  if (item.cruz) {
+    linhas.push({ icone: '✝️', rotulo: 'Cruz', valor: item.cruz });
+  }
+
+  if (item.relicarioOpcao === 'com') {
+    const tom = item.relicarioAcabamento === 'prata' ? 'Prata'
+              : item.relicarioAcabamento === 'dourado' ? 'Dourado' : '';
+    const modelo = item.relicarioModelo || 'Com relicário';
+    linhas.push({ icone: '📿', rotulo: 'Relicário', valor: (tom && !modelo.toLowerCase().includes(tom.toLowerCase())) ? `${modelo} (${tom})` : modelo });
+  } else if (item.relicarioOpcao === 'sem') {
+    linhas.push({ icone: '🚫', rotulo: 'Relicário', valor: 'Sem relicário' });
+  }
+
+  if (item.formaMontagemExtra) {
+    linhas.push({
+      icone: '🧵',
+      rotulo: 'Forma de montar',
+      valor: NOMES_FORMA_MONTAGEM[item.formaMontagemExtra] || item.formaMontagemExtra
+    });
+  }
+
+  return linhas;
+}
+
+/* =============================================
    UTILITÁRIO: renderiza bloco de nomes no carrinho
    ============================================= */
 function renderBlocoNomes(nomes) {
@@ -776,10 +817,9 @@ function render() {
     if (temCorMisterio && item.misterio) {
       detalhes += `<div class="item-detalhe"><strong>Mistério:</strong> ${escapeHtml(item.misterio)}</div>`;
     }
-    if (tipo === 'noiva') {
-      if (item.comFoto)       detalhes += `<div class="item-detalhe"><strong>Foto:</strong> ${item.comFoto === 'com-foto' ? '📸 Com foto' : '🚫 Sem foto'}</div>`;
-      if (item.formaMontagem) detalhes += `<div class="item-detalhe"><strong>Montagem:</strong> ${item.formaMontagem === 'linha' ? '🧵 Linha' : '🔗 Arame'}</div>`;
-    }
+    linhasEscolhas(item).forEach(l => {
+      detalhes += `<div class="item-detalhe"><strong>${l.rotulo}:</strong> ${escapeHtml(l.valor)}</div>`;
+    });
 
     let blocoNomes = '';
     if (tiposComNomes.includes(tipo) && item.personalizacao && Array.isArray(item.personalizacao.nomes)) {
@@ -998,10 +1038,9 @@ function finalizarWhatsApp() {
     if (temCorMisterio && item.cor)      msg += `   🎨 Cor: ${item.cor}\n`;
     if (temCorMisterio && item.misterio) msg += `   💗 Mistério: ${item.misterio}\n`;
 
-    if (tipo === 'noiva') {
-      if (item.comFoto)       msg += `   📸 Foto: ${item.comFoto === 'com-foto' ? 'Com foto' : 'Sem foto'}\n`;
-      if (item.formaMontagem) msg += `   🧵 Montagem: ${item.formaMontagem}\n`;
-    }
+    linhasEscolhas(item).forEach(l => {
+      msg += `   ${l.icone} ${l.rotulo}: ${l.valor}\n`;
+    });
 
     const pers = textoPersonalizacao(item);
     if (pers) msg += `   ✍️ Personalização: ${pers}\n`;
